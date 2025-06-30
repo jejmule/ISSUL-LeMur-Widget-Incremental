@@ -38,3 +38,6 @@ venv.bak/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+#chatgpt ignare partch file
+.patch
