@@ -1,0 +1,34 @@
+<IncrementalWidget>:
+    orientation: 'vertical'
+    BoxLayout:
+        size_hint_y: None
+        height: 30
+        Label:
+            text: 'Temps [s]'
+        Label:
+            text: 'Inclinaison [°]'
+        Label:
+            text: 'Vitesse [km/h]'
+        Label:
+            text: 'Vitesse Asc. [m/h]'
+        Label:
+            text: ''
+
+    ScrollView:
+        do_scroll_x: False
+        do_scroll_y: True
+        GridLayout:
+            id: points_grid
+            cols: 5
+            size_hint_y: None
+            height: self.minimum_height
+            row_default_height: 40
+            row_force_default: True
+            padding: [0, 4]
+            spacing: [4, 4]
+
+    Button:
+        text: 'Ajouter un point'
+        size_hint_y: None
+        height: 50
+        on_press: root.add_point()
