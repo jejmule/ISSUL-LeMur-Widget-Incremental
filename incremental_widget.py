@@ -47,9 +47,9 @@ class IncrementalWidget(BoxLayout):
         grid = self.ids.points_grid
 
         ti_time = TabNavigableInput(hint_text='s', multiline=False, input_filter='float')
-        ti_incl = TabNavigableInput(hint_text='°', multiline=False)
-        ti_speed = TabNavigableInput(hint_text='km/h', multiline=False)
-        ti_asc = TabNavigableInput(hint_text='m/h', multiline=False)
+        ti_incl = TabNavigableInput(hint_text='°', multiline=False, input_filter='float')
+        ti_speed = TabNavigableInput(hint_text='km/h', multiline=False, input_filter='float')
+        ti_asc = TabNavigableInput(hint_text='m/h', multiline=False, input_filter='float')
 
         for ti in [ti_time, ti_incl, ti_speed, ti_asc]:
             ti.parent_widget = self
@@ -84,38 +84,41 @@ class IncrementalWidget(BoxLayout):
                 return float(text)
             except:
                 return None
-
+        
         v_text = row['speed'].text.strip().lower()
         i_text = row['incl'].text.strip().lower()
         a_text = row['asc'].text.strip().lower()
 
-        is_nc = lambda txt: txt == 'nc'
+        v = parse(v_text)
+        i = parse(i_text)
+        a = parse(a_text)
 
-        v = None if is_nc(v_text) else parse(v_text)
-        i = None if is_nc(i_text) else parse(i_text)
-        a = None if is_nc(a_text) else parse(a_text)
-
-        # Réinitialiser tous les champs à éditables et fond blanc
-        for field in [row['incl'], row['speed'], row['asc']]:
-            field.readonly = False
-            field.background_color = (1, 1, 1, 1)
+        # Si tous les champs sont None on ne fait rien
+        if a is None or v is None or i is None:
+            return
+        
+        #Si un champ est déjà calculé on remplace le texte par -
+        for field in ['speed', 'incl', 'asc']:
+            if row[field].readonly and parse(row[field].text.strip().lower()) > 0:
+                row[field].readonly = False
+                row[field].text = '-1'
 
         # Si champ marqué 'nc', alors le calculer, verrouiller et griser
-        if is_nc(a_text) and v is not None and i is not None:
-            a_calc = v * sin(radians(i))
+        if a < 0 and v is not None and i is not None:
+            a_calc = v * sin(radians(i)) * 1000 # Convert km/h to m/h 
             row['asc'].text = f"{a_calc:.2f}"
             row['asc'].readonly = True
             row['asc'].background_color = (0.7, 0.7, 0.7, 1)
 
-        elif is_nc(v_text) and a is not None and i is not None and sin(radians(i)) != 0:
-            v_calc = a / sin(radians(i))
+        elif v < 0 and a is not None and i is not None and sin(radians(i)) != 0:
+            v_calc = a / sin(radians(i)) / 1000 # Convert m/h to km/h
             row['speed'].text = f"{v_calc:.2f}"
             row['speed'].readonly = True
             row['speed'].background_color = (0.7, 0.7, 0.7, 1)
 
-        elif is_nc(i_text) and a is not None and v is not None and v != 0:
+        elif i < 0 and a is not None and v is not None and v != 0:
             try:
-                i_calc = degrees(asin(a / v))
+                i_calc = degrees(asin((a/1000) / v))
                 row['incl'].text = f"{i_calc:.2f}"
                 row['incl'].readonly = True
                 row['incl'].background_color = (0.7, 0.7, 0.7, 1)
