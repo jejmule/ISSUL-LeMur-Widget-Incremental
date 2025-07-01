@@ -32,3 +32,27 @@
         size_hint_y: None
         height: 50
         on_press: root.add_point()
+
+    BoxLayout:
+        orientation: 'vertical'
+        size_hint_y: 0.5
+
+        BoxLayout:
+            size_hint_y: None
+            height: '40dp'
+            ToggleButton:
+                text: 'Inclinaison'
+                group: 'graph_axis'
+                state: 'down'
+                on_press: root.set_graph_variable('incl')
+            ToggleButton:
+                text: 'Vitesse'
+                group: 'graph_axis'
+                on_press: root.set_graph_variable('speed')
+            ToggleButton:
+                text: 'Vitesse Asc.'
+                group: 'graph_axis'
+                on_press: root.set_graph_variable('asc')
+
+        BoxLayout:
+            id: graph_view

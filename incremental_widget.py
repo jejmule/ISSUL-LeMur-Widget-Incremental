@@ -2,9 +2,15 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.clock import Clock
 from kivy.lang import Builder
-from math import radians, sin, degrees, asin
+from math import radians, sin, degrees, asin, floor, ceil
 from kivy.uix.textinput import TextInput
+from kivy_garden.graph import Graph, MeshLinePlot
 
+def parse(text):
+    try:
+        return float(text)
+    except:
+        return None
 
 class TabNavigableInput(TextInput):
     def __init__(self, **kwargs):
@@ -23,7 +29,9 @@ class IncrementalWidget(BoxLayout):
         Builder.load_file("incremental_widget.kv")
         super().__init__(**kwargs)
         Clock.schedule_once(self._delayed_init)
+        Clock.schedule_once(self._post_init)
 
+    ### table section ***************************
     def _delayed_init(self, *args):
         self.points = []
         self.add_point()
@@ -65,6 +73,7 @@ class IncrementalWidget(BoxLayout):
             self.points.remove(row)
 
         def on_change(instance, value):
+            self.update_graph()
             self.recalculate(row)
 
         for widget in [ti_time, ti_incl, ti_speed, ti_asc]:
@@ -74,16 +83,8 @@ class IncrementalWidget(BoxLayout):
 
         for widget in [ti_time, ti_incl, ti_speed, ti_asc, btn]:
             grid.add_widget(widget)
-
-    
-    
     
     def recalculate(self, row):
-        def parse(text):
-            try:
-                return float(text)
-            except:
-                return None
         
         v_text = row['speed'].text.strip().lower()
         i_text = row['incl'].text.strip().lower()
@@ -99,7 +100,7 @@ class IncrementalWidget(BoxLayout):
         
         #Si un champ est déjà calculé on remplace le texte par -
         for field in ['speed', 'incl', 'asc']:
-            if row[field].readonly and parse(row[field].text.strip().lower()) > 0:
+            if row[field].readonly and parse(row[field].text.strip().lower()) >= 0:
                 row[field].readonly = False
                 row[field].text = '-1'
 
@@ -111,7 +112,7 @@ class IncrementalWidget(BoxLayout):
             row['asc'].background_color = (0.7, 0.7, 0.7, 1)
 
         elif v < 0 and a is not None and i is not None and sin(radians(i)) != 0:
-            v_calc = a / sin(radians(i)) / 1000 # Convert m/h to km/h
+            v_calc = (a/1000) / sin(radians(i)) # Convert m/h to km/h
             row['speed'].text = f"{v_calc:.2f}"
             row['speed'].readonly = True
             row['speed'].background_color = (0.7, 0.7, 0.7, 1)
@@ -124,3 +125,66 @@ class IncrementalWidget(BoxLayout):
                 row['incl'].background_color = (0.7, 0.7, 0.7, 1)
             except:
                 pass
+    ### graph section ***************************
+    def _post_init(self, *args):
+        self.graph_variable = 'inclinaison'
+        self.plot = MeshLinePlot(color=[1, 0, 0, 1])
+        self.graph = Graph(xlabel='Temps (s)', ylabel='Inclinaison (°)',
+                           x_ticks_minor=5, x_ticks_major=10,
+                           y_ticks_minor=5, y_ticks_major=10,
+                           y_grid_label=True, x_grid_label=True,
+                           padding=5, x_grid=True, y_grid=True,
+                           xmin=0, xmax=60, ymin=0, ymax=30)
+        self.graph.add_plot(self.plot)
+        self.ids.graph_view.clear_widgets()
+        self.ids.graph_view.add_widget(self.graph)
+        self.set_graph_variable('incl')
+        self.update_graph()
+
+    def set_graph_variable(self, var_name):
+        self.graph_variable = var_name
+        if self.graph:
+            unit = {
+                'incl': 'Inclinaison (°)',
+                'speed': 'Vitesse (km/h)',
+                'asc': 'Vitesse Asc. (m/h)'
+            }.get(var_name, '')
+            self.graph.ylabel = unit
+        self.update_graph()
+
+    def update_graph(self):
+        graph_points  = []
+        for point in self.points:
+            try:
+                x = parse(point['time'].text.strip())
+                y = parse(point[self.graph_variable].text.strip())
+                if x is not None and y is not None:
+                    graph_points.append((x, y))
+            except Exception:
+                continue
+        
+        if not graph_points:
+            return
+        self.plot.points = graph_points
+        # Ajustement dynamique des axes  
+        x_vals = [p[0] for p in graph_points]
+        y_vals = [p[1] for p in graph_points]
+        x_range = max(x_vals) - min(x_vals)
+        y_range = max(y_vals) - min(y_vals)
+        #avoid division by zero on axes calculation
+        if x_range == 0 :
+            x_vals = [min(x_vals), max(x_vals) + 1]
+            x_range = 1
+        if y_range == 0:
+            y_vals = [min(y_vals)-1, max(y_vals) + 1]
+            y_range = 1
+        # Set the graph limits to be multiples of thick major
+        self.graph.xmin = floor(min(x_vals) / 10) * 10
+        self.graph.xmax = ceil(max(x_vals) / 10) * 10 
+        self.graph.ymin = floor(min(y_vals) / 10) * 10
+        self.graph.ymax = ceil(max(y_vals) / 10) * 10
+        #Set the graphs ticks
+        self.graph.x_ticks_major = (self.graph.xmax-self.graph.xmin) / 10
+        self.graph.y_ticks_major = (self.graph.ymax-self.graph.ymin) / 5
+        #self.graph.x_ticks_minor = x_range / 20
+        #self.graph.y_ticks_minor = y_range / 20 
