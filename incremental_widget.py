@@ -1,9 +1,10 @@
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
+from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.lang import Builder
 from math import radians, sin, degrees, asin, floor, ceil
-from kivy.uix.textinput import TextInput
 from kivy_garden.graph import Graph, MeshLinePlot
 
 def parse(text):
@@ -25,6 +26,7 @@ class TabNavigableInput(TextInput):
 
 
 class IncrementalWidget(BoxLayout):
+
     def __init__(self, **kwargs):
         Builder.load_file("incremental_widget.kv")
         super().__init__(**kwargs)
@@ -127,8 +129,10 @@ class IncrementalWidget(BoxLayout):
                 pass
     ### graph section ***************************
     def _post_init(self, *args):
+        # Initialize the graph and its properties
+        self.events = []    # List to store events for the graph {"time": ..., "speed": ..., "angle": ..., "comment": ""}
         self.graph_variable = 'inclinaison'
-        self.plot = MeshLinePlot(color=[1, 0, 0, 1])
+        self.plot = MeshLinePlot(color=[0, 1, 0, 1])
         self.graph = Graph(xlabel='Temps (s)', ylabel='Inclinaison (°)',
                            x_ticks_minor=5, x_ticks_major=10,
                            y_ticks_minor=5, y_ticks_major=10,
@@ -186,5 +190,42 @@ class IncrementalWidget(BoxLayout):
         #Set the graphs ticks
         self.graph.x_ticks_major = (self.graph.xmax-self.graph.xmin) / 10
         self.graph.y_ticks_major = (self.graph.ymax-self.graph.ymin) / 5
-        #self.graph.x_ticks_minor = x_range / 20
-        #self.graph.y_ticks_minor = y_range / 20 
+        self.graph.x_ticks_minor = self.graph.x_ticks_major / 2
+        self.graph.y_ticks_minor =self.graph.y_ticks_major / 2
+
+    ### Events section ***************************
+    def refresh_events(self):
+        grid = self.ids.events_grid
+        grid.clear_widgets()
+        for event in self.events:
+            grid.add_widget(Label(text=str(event["time"])))
+            grid.add_widget(Label(text=str(event["speed"])))
+            grid.add_widget(Label(text=str(event["angle"])))
+            comment = TextInput(text=event["comment"])
+            grid.add_widget(comment)
+            grid.add_widget(Button(text="Supprimer", on_release=lambda btn, ev=event: self.delete_event(ev)))
+    
+    def add_event(self):
+        current_time = 10 #self.elapsed_time  # ou variable que tu utilises
+        speed = 0 #self.get_speed(current_time)
+        angle = 0 #self.get_angle(current_time)
+        new_event = {"time": current_time, "speed": speed, "angle": angle, "comment": ""}
+        self.events.append(new_event)
+        self.draw_event_line(current_time)
+        self.refresh_events()
+
+    def draw_event_line(self, time_s):
+        line = MeshLinePlot(color=[1, 0, 0, 1])
+        line.points = [(time_s, 0), (time_s, 1e9)]
+        self.graph.add_plot(line)
+    
+    def delete_event(self, event):
+        self.events.remove(event)
+        self.refresh_events()
+        # Remove the event line from the graph
+        for plot in self.graph.plots:
+            if isinstance(plot, MeshLinePlot) and len(plot.points) == 2 :
+                if plot.points[0][0] == event["time"] and plot.points[1][0] == event["time"]:
+                    self.graph.remove_plot(plot)
+                    break
+        self.update_graph()
