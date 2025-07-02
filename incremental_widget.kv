@@ -39,11 +39,21 @@
                 padding: [0, 4]
                 spacing: [4, 4]
 
-        Button:
-            text: 'Ajouter un point'
+        BoxLayout :
             size_hint_y: None
             height: 50
-            on_press: root.add_point()
+            orientation: 'horizontal'
+                        
+            Button:
+                text: 'Ajouter un point'
+                on_press: root.add_point()
+            
+            Button:
+                text: "Charger profil"
+                on_release: root.load_profile()
+            Button:
+                text: "Sauvegarder profil"
+                on_release: root.save_profile()
     #---- ESPACE DE SEPARATION ----#
     BoxLayout:
         size_hint_y: None
