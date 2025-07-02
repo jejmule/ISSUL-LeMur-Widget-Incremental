@@ -87,10 +87,15 @@
             height: "40dp"
             ToggleButton:
                 text: "Start"
-                on_release: root.start()
+                id : start_button
+                on_release: root.start_test()
+                group: "test_control"
             ToggleButton:
                 text: "Stop"
-                on_release: root.stop()
+                id : stop_button
+                on_release: root.stop_test()
+                group: "test_control"
+                state: "down"
    
         GridLayout:
             cols: 5
@@ -103,11 +108,11 @@
             Label: 
                 text: "Temps [s]"
             Label: 
-                text: "Vitesse [km/h]"
-            Label: 
                 text: "Inclinaison [°]"
             Label: 
-                text: "Commentaire"
+                text: "Vitesse [km/h]"
+            Label: 
+                text: "Vitesse Asc. [m/h]"
             Label: 
                 text: ""
         ScrollView:

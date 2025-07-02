@@ -1,3 +1,4 @@
+from kivy_garden.graph import Graph, MeshLinePlot, LinePlot
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.textinput import TextInput
 from kivy.uix.button import Button
@@ -5,11 +6,12 @@ from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.lang import Builder
 from math import radians, sin, degrees, asin, floor, ceil
-from kivy_garden.graph import Graph, MeshLinePlot
+import numpy as np
+import time
 
-def parse(text):
+def parse(text_widget):
     try:
-        return float(text)
+        return float(text_widget.text.strip().lower().replace(',', '.'))
     except:
         return None
 
@@ -32,10 +34,16 @@ class IncrementalWidget(BoxLayout):
         super().__init__(**kwargs)
         Clock.schedule_once(self._delayed_init)
         Clock.schedule_once(self._post_init)
+        self.test_running = False
+        self.test_start_time = None
+        self.elapsed_time = 0
+        self.time_update_event = None
+        self.current_dot = None  # pour afficher le rond d'avancement
 
     ### table section ***************************
     def _delayed_init(self, *args):
         self.points = []
+        self.test_points = []
         self.add_point()
 
     def handle_tab(self, instance):
@@ -75,8 +83,10 @@ class IncrementalWidget(BoxLayout):
             self.points.remove(row)
 
         def on_change(instance, value):
-            self.update_graph()
+            # Update the row with the new value
             self.recalculate(row)
+            # Recalculate the graph after any change
+            self.update_graph()
 
         for widget in [ti_time, ti_incl, ti_speed, ti_asc]:
             widget.bind(text=on_change)
@@ -87,14 +97,10 @@ class IncrementalWidget(BoxLayout):
             grid.add_widget(widget)
     
     def recalculate(self, row):
-        
-        v_text = row['speed'].text.strip().lower()
-        i_text = row['incl'].text.strip().lower()
-        a_text = row['asc'].text.strip().lower()
-
-        v = parse(v_text)
-        i = parse(i_text)
-        a = parse(a_text)
+        # Récupération des valeurs des champs
+        v = parse(row['speed'])
+        i = parse(row['incl'])
+        a = parse(row['asc'])
 
         # Si tous les champs sont None on ne fait rien
         if a is None or v is None or i is None:
@@ -102,7 +108,7 @@ class IncrementalWidget(BoxLayout):
         
         #Si un champ est déjà calculé on remplace le texte par -
         for field in ['speed', 'incl', 'asc']:
-            if row[field].readonly and parse(row[field].text.strip().lower()) >= 0:
+            if row[field].readonly and parse(row[field]) >= 0:
                 row[field].readonly = False
                 row[field].text = '-1'
 
@@ -127,6 +133,31 @@ class IncrementalWidget(BoxLayout):
                 row['incl'].background_color = (0.7, 0.7, 0.7, 1)
             except:
                 pass
+        
+        # Generate array of points for the graph
+        self.test_points = []
+        for row in self.points:
+            try:
+                t = parse(row["time"])
+                incl = parse(row["incl"])
+                speed = parse(row["speed"])
+                asc = parse(row["asc"])
+            except ValueError:
+                continue
+            #add the point to the test_points list if there is no -1 in the values
+            if t is not None and incl is not None and speed is not None and asc is not None:
+                if -1 not in [t, incl, speed, asc]:
+                    # Append the point to the test_points list
+                    self.test_points.append({
+                        'time': t,
+                        'incl': incl,
+                        'speed': speed,
+                        'asc': asc
+                    })
+        #Sort the test_points by time
+        self.test_points.sort(key=lambda x: x['time'])
+        
+
     ### graph section ***************************
     def _post_init(self, *args):
         # Initialize the graph and its properties
@@ -157,22 +188,11 @@ class IncrementalWidget(BoxLayout):
         self.update_graph()
 
     def update_graph(self):
-        graph_points  = []
-        for point in self.points:
-            try:
-                x = parse(point['time'].text.strip())
-                y = parse(point[self.graph_variable].text.strip())
-                if x is not None and y is not None:
-                    graph_points.append((x, y))
-            except Exception:
-                continue
-        
-        if not graph_points:
+        if not self.test_points:
             return
-        self.plot.points = graph_points
         # Ajustement dynamique des axes  
-        x_vals = [p[0] for p in graph_points]
-        y_vals = [p[1] for p in graph_points]
+        x_vals = [p['time'] for p in self.test_points]
+        y_vals = [p[self.graph_variable] for p in self.test_points]
         x_range = max(x_vals) - min(x_vals)
         y_range = max(y_vals) - min(y_vals)
         #avoid division by zero on axes calculation
@@ -192,24 +212,31 @@ class IncrementalWidget(BoxLayout):
         self.graph.y_ticks_major = (self.graph.ymax-self.graph.ymin) / 5
         self.graph.x_ticks_minor = self.graph.x_ticks_major / 2
         self.graph.y_ticks_minor =self.graph.y_ticks_major / 2
+        #add the points to the plot
+        self.plot.points = [(p['time'], p[self.graph_variable]) for p in self.test_points]
 
     ### Events section ***************************
     def refresh_events(self):
         grid = self.ids.events_grid
         grid.clear_widgets()
         for event in self.events:
-            grid.add_widget(Label(text=str(event["time"])))
-            grid.add_widget(Label(text=str(event["speed"])))
-            grid.add_widget(Label(text=str(event["angle"])))
-            comment = TextInput(text=event["comment"])
-            grid.add_widget(comment)
+            grid.add_widget(Label(text="{:.2f}".format(event["time"])))
+            grid.add_widget(Label(text="{:.2f}".format(event["speed"])))
+            grid.add_widget(Label(text="{:.2f}".format(event["angle"])))
+            grid.add_widget(Label(text="{:.2f}".format(event["asc"])))
             grid.add_widget(Button(text="Supprimer", on_release=lambda btn, ev=event: self.delete_event(ev)))
     
     def add_event(self):
-        current_time = 10 #self.elapsed_time  # ou variable que tu utilises
-        speed = 0 #self.get_speed(current_time)
-        angle = 0 #self.get_angle(current_time)
-        new_event = {"time": current_time, "speed": speed, "angle": angle, "comment": ""}
+        #add event only if the test is running
+        if not self.test_running:
+            return
+        #add a new event at the current time
+        current_time = self.elapsed_time  # ou variable que tu utilises
+        speed = self.get_speed(current_time)
+        angle = self.get_angle(current_time)
+        asc = self.get_speed_asc(current_time)
+
+        new_event = {"time": current_time, "speed": speed, "angle": angle, "asc": asc}
         self.events.append(new_event)
         self.draw_event_line(current_time)
         self.refresh_events()
@@ -220,6 +247,11 @@ class IncrementalWidget(BoxLayout):
         self.graph.add_plot(line)
     
     def delete_event(self, event):
+        #if event is None call recusrsively the funtion for each event
+        if event is None:
+            for ev in self.events[:]:
+                self.delete_event(ev)
+            return
         self.events.remove(event)
         self.refresh_events()
         # Remove the event line from the graph
@@ -229,3 +261,77 @@ class IncrementalWidget(BoxLayout):
                     self.graph.remove_plot(plot)
                     break
         self.update_graph()
+    
+    ### Start/Stop Test section ***************************
+    def start_test(self):
+        if not self.test_running:
+            #clear events
+            self.delete_event(None)
+            #init running state
+            self.test_running = True
+            self.test_start_time = time.time()
+            #schedule update
+            self.time_update_event = Clock.schedule_interval(self.update_test_time, 0.1)
+
+    def stop_test(self):
+        if self.test_running:
+            self.test_running = False
+            if self.time_update_event:
+                self.time_update_event.cancel()
+                self.time_update_event = None
+
+    def update_test_time(self, dt):
+        if not self.test_running:
+            return
+
+        self.elapsed_time = time.time() - self.test_start_time
+        t = self.elapsed_time
+
+        #stop test is the elapsed time is greater than maximum time
+        if t > max([p['time'] for p in self.test_points]):
+            self.stop_test()
+            self.ids.stop_button.state = 'down'
+            self.ids.start_button.state = 'normal'
+            return
+
+        #speed = self.get_speed(t)
+        #angle = self.get_angle(t)
+        #asc_speed = self.get_speed_asc(t)
+
+        # Mettre à jour l'affichage du temps et des valeurs actuelles
+        #self.ids.time_display.text = f"{int(t)} s"
+        #self.ids.speed_display.text = f"{speed:.2f} km/h"
+        #self.ids.angle_display.text = f"{angle:.2f} °"
+        #self.ids.asc_display.text = f"{self.get_speed_asc(t):.2f} m/h"
+
+        # Positionner le point sur le graphique
+        self.update_graph_dot(t, self._interpolate(t,self.graph_variable))
+    
+    def update_graph_dot(self, time_value, y_value):
+        if not self.current_dot:
+            self.current_dot = MeshLinePlot(color=[1, 1, 0, 1])
+            self.graph.add_plot(self.current_dot)
+        self.current_dot.points =  [(time_value, 0), (time_value, 1e9)]
+    
+    def get_speed(self, t):
+        return self._interpolate(t,"speed")
+
+    def get_angle(self, t):
+        return self._interpolate(t,"incl")
+
+    def get_speed_asc(self, t):
+        return self._interpolate(t,"asc")
+    
+    def _interpolate(self, t, key):
+        if not self.test_points:
+            return 0
+
+        times = np.array([p["time"] for p in self.test_points])
+        values = np.array([p[key] for p in self.test_points])
+
+        if t <= times[0]:
+            return values[0]
+        elif t >= times[-1]:
+            return values[-1]
+        else:
+            return float(np.interp(t, times, values))
